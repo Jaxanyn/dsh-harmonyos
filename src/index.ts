@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type ToolRegistry from '@deepseek-ai/dsh-tools'
 import { harmonyTools } from './tools.js'
 
-export { listDevices } from './hdc.js'
+export { capture, inputText, keyEvent, listDevices, longPress, swipe, tap } from './hdc.js'
 
 export const inject = ['tools']
 

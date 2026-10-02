@@ -15,7 +15,8 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.client.json",
     "build": "pnpm run typecheck && tsdown --config tsdown.config.mjs",
-    "test": "node --test test/**/*.test.mjs"
+    "test": "node --test test/**/*.test.mjs",
+    "test:device": "node --test test/real-device.test.mjs"
   },
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
