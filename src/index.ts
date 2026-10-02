@@ -3,6 +3,7 @@ import type ToolRegistry from '@deepseek-ai/dsh-tools'
 import { harmonyTools } from './tools.js'
 
 export { capture, inputText, keyEvent, listDevices, longPress, swipe, tap } from './hdc.js'
+export { harmonyTools } from './tools.js'
 
 export const inject = ['tools']
 
