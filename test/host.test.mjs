@@ -5,7 +5,7 @@ test('host registers and disposes every HarmonyOS tool', async () => {
   const { apply, harmonyTools } = await import(new URL('../lib/index.mjs', import.meta.url))
   const registered = []
   const disposed = []
-  const ctx = { tools: { register(tool) { registered.push(tool.name); return () => disposed.push(tool.name) } } }
+  const ctx = { tools: { register(tool) { registered.push(tool.name); return () => disposed.push(tool.name) } }, webServer: { register() { return () => {} } } }
   const dispose = apply(ctx)
   assert.deepEqual(registered, harmonyTools.map(tool => tool.name))
   dispose()

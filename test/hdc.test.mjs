@@ -2,9 +2,35 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 const modulePath = new URL('../lib/index.mjs', import.meta.url)
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+WAAAAABJRU5ErkJggg==', 'base64')
 
-test('HDC adapter rejects invalid coordinates before dispatch', async () => {
-  const { tap, inputText } = await import(modulePath)
-  await assert.rejects(() => tap('device', -1, 0), /non-negative/)
-  await assert.rejects(() => inputText('device', ''), /1 to 4096/)
+function fake(stdout = '') {
+  const calls = []
+  const executor = async (_file, args, options) => { calls.push({ args, options }); return { stdout, stderr: '' } }
+  return { calls, executor }
+}
+
+test('HDC adapter validates inputs and uses explicit target plus remote quoting', async () => {
+  const { tap, inputText, keyEvent } = await import(modulePath)
+  const f = fake()
+  await tap('5KLBB25A13202598', 1, 2, { executor: f.executor })
+  assert.deepEqual(f.calls[0].args.slice(0, 2), ['-t', '5KLBB25A13202598'])
+  assert.match(f.calls[0].args.at(-1), /click.*1.*2/)
+  await inputText('5KLBB25A13202598', "a'b; echo pwned", { executor: f.executor })
+  assert.match(f.calls[1].args.at(-1), /a.*pwned/)
+  await keyEvent('5KLBB25A13202598', 'Back', { executor: f.executor })
+  await assert.rejects(() => tap('', 1, 2, { executor: f.executor }), /explicit valid/)
+  await assert.rejects(() => keyEvent('5KLBB25A13202598', 'KEY_HOME', { executor: f.executor }), /numeric/)
+})
+
+test('uitest contract rejects unsupported long press duration and validates swipe velocity', async () => {
+  const { longPress, swipe } = await import(modulePath)
+  await assert.rejects(() => longPress('5KLBB25A13202598', 1, 2, 700), /not supported/)
+  await assert.rejects(() => swipe('5KLBB25A13202598', 1, 2, 3, 4, 100), /200 to 40000/)
+})
+
+test('semantic HDC errors fail despite executor success', async () => {
+  const { tap } = await import(modulePath)
+  const f = fake('Missing parameter')
+  await assert.rejects(() => tap('5KLBB25A13202598', 1, 2, { executor: f.executor }), /command failure/)
 })

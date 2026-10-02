@@ -63,12 +63,12 @@ const interactTool = defineTool({
     action: { type: 'string', enum: ['tap', 'swipe', 'long_press', 'button', 'type'], required: true },
     x: { type: 'number' }, y: { type: 'number' },
     fromX: { type: 'number' }, fromY: { type: 'number' }, toX: { type: 'number' }, toY: { type: 'number' },
-    durationMs: { type: 'number' }, key: { type: 'string' }, text: { type: 'string' },
+    velocity: { type: 'number', description: 'Swipe velocity in pixels per second, 200..40000.' }, durationMs: { type: 'number', description: 'Unsupported for long_press; passing it is rejected by HDC.' }, key: { type: 'string' }, text: { type: 'string' },
   },
   output: { schema: { type: 'object', additionalProperties: false, properties: { deviceId: { type: 'string' }, action: { type: 'string' }, connected: { type: 'boolean' } } }, render: (_args, value) => jsonResult(value) },
   async execute(args) {
     if (args.action === 'tap') await tap(args.deviceId, args.x ?? -1, args.y ?? -1)
-    else if (args.action === 'swipe') await swipe(args.deviceId, args.fromX ?? -1, args.fromY ?? -1, args.toX ?? -1, args.toY ?? -1, args.durationMs)
+    else if (args.action === 'swipe') await swipe(args.deviceId, args.fromX ?? -1, args.fromY ?? -1, args.toX ?? -1, args.toY ?? -1, args.velocity)
     else if (args.action === 'long_press') await longPress(args.deviceId, args.x ?? -1, args.y ?? -1, args.durationMs)
     else if (args.action === 'button') await keyEvent(args.deviceId, args.key ?? '')
     else if (args.action === 'type') await inputText(args.deviceId, args.text ?? '')
