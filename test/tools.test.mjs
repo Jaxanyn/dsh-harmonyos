@@ -10,5 +10,6 @@ test('registers the current HarmonyOS tool surface', async () => {
     'harmony_preview_info',
     'harmony_screenshot',
     'harmony_interact',
+    'harmony_build_run',
   ])
 })

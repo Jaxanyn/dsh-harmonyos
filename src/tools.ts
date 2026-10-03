@@ -1,5 +1,6 @@
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { capture, inputText, keyEvent, listDevices, longPress, swipe, tap } from './hdc.js'
+import { buildAndRun } from './build.js'
 import { explainHdcError } from './errors.js'
 import { getSession, listSessions, resolveDevice, startSession, stopSession } from './session.js'
 
@@ -76,5 +77,18 @@ const interactTool = defineTool({
   },
 })
 
-export const harmonyTools: ToolDefinition[] = [devicesTool, previewStartTool, previewStopTool, previewInfoTool, screenshotTool, interactTool]
+const buildRunTool = defineTool({
+  name: 'harmony_build_run',
+  description: 'Build a pure HarmonyOS Stage project, install its HAP through HDC, and launch the explicitly named ability.',
+  parameters: {
+    projectPath: { type: 'string', required: true }, deviceId: { type: 'string', required: true },
+    bundleName: { type: 'string', required: true }, abilityName: { type: 'string', required: true },
+    module: { type: 'string', required: true }, product: { type: 'string', required: true }, target: { type: 'string', required: true },
+    buildMode: { type: 'string', enum: ['debug', 'release'] }, hapPath: { type: 'string' }, timeoutMs: { type: 'number' },
+  },
+  output: { schema: { type: 'object', additionalProperties: false, properties: { projectPath: { type: 'string' }, hapPath: { type: 'string' }, bundleName: { type: 'string' }, abilityName: { type: 'string' }, deviceId: { type: 'string' }, built: { type: 'boolean' }, installed: { type: 'boolean' }, started: { type: 'boolean' } } }, render: (_args, value) => jsonResult(value) },
+  async execute(args) { return buildAndRun(args) },
+})
+
+export const harmonyTools: ToolDefinition[] = [devicesTool, previewStartTool, previewStopTool, previewInfoTool, screenshotTool, interactTool, buildRunTool]
 export { explainHdcError, getSession }

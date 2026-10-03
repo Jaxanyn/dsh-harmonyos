@@ -8,7 +8,8 @@
   "types": "lib/index.d.mts",
   "exports": {
     ".": { "types": "./lib/index.d.mts", "default": "./lib/index.mjs" },
-    "./client": { "default": "./lib/client.js" }
+    "./client": { "default": "./lib/client.js" },
+    "./package.json": "./package.json"
   },
   "files": ["lib", "lib/client.js", "cordis.patch.yml", "README.md", "LICENSE"],
   "engines": { "node": ">=24" },
@@ -20,7 +21,7 @@
   },
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
-    "client": { "inject": ["dsh-harmonyos/client"], "platform": "web" }
+    "client": { "inject": ["@deepseek-ai/dsh-client-runtime", "@deepseek-ai/dsh-client-locale", "@deepseek-ai/dsh-client-ui-conversation", "@deepseek-ai/dsh-client-ui-tool", "@deepseek-ai/dsh-client-ui-theme"], "platform": "web" }
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",

@@ -4,7 +4,8 @@ import { harmonyTools } from './tools.js'
 import { installHarmonyRoutes } from './routes.js'
 import { closeAllSessions } from './session.js'
 
-export { capture, inputText, keyEvent, listDevices, longPress, swipe, tap } from './hdc.js'
+export { capture, inputText, installPackage, keyEvent, listDevices, longPress, startAbility, swipe, tap } from './hdc.js'
+export { buildAndRun } from './build.js'
 export { harmonyTools } from './tools.js'
 export { installHarmonyRoutes } from './routes.js'
 

@@ -8,6 +8,7 @@ import { crc32 } from 'node:zlib'
 import { HdcError } from './errors.js'
 
 const execFileAsync = promisify(execFile)
+const deviceLocks = new Map<string, Promise<void>>()
 
 export interface HarmonyDevice {
   serial: string
@@ -45,6 +46,12 @@ async function execHdc(args: string[], options: HdcOptions = {}): Promise<{ stdo
   if (!Number.isInteger(maxBuffer) || maxBuffer < 1 || maxBuffer > 8 * 1024 * 1024) throw new HdcError('maxBuffer must be an integer from 1 to 8388608.')
   if (options.deviceId !== undefined) assertDevice(options.deviceId)
   const target = options.deviceId === undefined ? [] : ['-t', options.deviceId]
+  const lockKey = (options.hdc ?? process.env.HDC ?? 'hdc') + ':' + (options.deviceId ?? '*')
+  const previous = deviceLocks.get(lockKey) ?? Promise.resolve()
+  let release!: () => void
+  const current = new Promise<void>(resolve => { release = resolve })
+  deviceLocks.set(lockKey, current)
+  await previous
   try {
     options.signal?.throwIfAborted()
     const result = await (options.executor ?? execFileAsync)(options.hdc ?? process.env.HDC ?? 'hdc', [...target, ...args], {
@@ -63,6 +70,9 @@ async function execHdc(args: string[], options: HdcOptions = {}): Promise<{ stdo
     if (options.signal?.aborted) throw new HdcError('HDC command was cancelled.', error)
     // Do not include execFile's message: it includes the command and potentially private input text.
     throw new HdcError('HDC command failed (process exit, timeout, or output limit).', error)
+  } finally {
+    release()
+    if (deviceLocks.get(lockKey) === current) deviceLocks.delete(lockKey)
   }
 }
 
@@ -140,21 +150,42 @@ export function pngDimensions(data: Buffer): { width: number; height: number } {
   throw invalid()
 }
 
+export async function installPackage(deviceId: string, hapPath: string, options: HdcOptions = {}): Promise<void> {
+  assertDevice(deviceId)
+  if (!hapPath.toLowerCase().endsWith('.hap')) throw new HdcError('Only .hap artifacts can be installed.')
+  await execHdc(['install', '-r', hapPath], { ...options, deviceId })
+}
+
+export async function startAbility(deviceId: string, bundleName: string, abilityName: string, options: HdcOptions = {}): Promise<void> {
+  assertDevice(deviceId)
+  if (!/^[A-Za-z][A-Za-z0-9_.-]{0,127}$/.test(bundleName) || !/^[A-Za-z][A-Za-z0-9_.-]{0,127}$/.test(abilityName)) throw new HdcError('bundleName and abilityName must be valid HarmonyOS identifiers.')
+  await shell(deviceId, ['aa', 'start', '-b', bundleName, '-a', abilityName], options)
+}
+
 export async function capture(deviceId: string, options: HdcOptions = {}): Promise<{ mimeType: 'image/png'; data: Buffer; width: number; height: number }> {
   assertDevice(deviceId)
   options.signal?.throwIfAborted()
   const directory = await mkdtemp(join(tmpdir(), 'dsh-harmonyos-'))
-  const localPath = join(directory, 'screen.png')
-  const remotePath = '/data/local/tmp/dsh-harmonyos-' + randomUUID() + '.png'
   try {
-    await shell(deviceId, ['uitest', 'screenCap', '-p', remotePath], options)
-    await execHdc(['file', 'recv', remotePath, localPath], { ...options, deviceId })
-    if ((await stat(localPath)).size > 32 * 1024 * 1024) throw new HdcError('HDC screenshot exceeds 32 MiB.')
-    const data = await readFile(localPath)
-    return { mimeType: 'image/png', data, ...pngDimensions(data) }
+    let lastError: unknown
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const localPath = join(directory, 'screen-' + attempt + '.png')
+      const remotePath = '/data/local/tmp/dsh-harmonyos-' + randomUUID() + '.png'
+      try {
+        await shell(deviceId, ['uitest', 'screenCap', '-p', remotePath], options)
+        await execHdc(['file', 'recv', remotePath, localPath], { ...options, deviceId })
+        if ((await stat(localPath)).size > 32 * 1024 * 1024) throw new HdcError('HDC screenshot exceeds 32 MiB.')
+        const data = await readFile(localPath)
+        return { mimeType: 'image/png', data, ...pngDimensions(data) }
+      } catch (error) {
+        lastError = error
+        if (!(error instanceof HdcError) || !error.message.includes('valid bounded PNG') || attempt === 2) throw error
+      } finally {
+        await shell(deviceId, ['rm', '-f', remotePath], { ...options, signal: undefined, timeoutMs: 3000 }).catch(() => undefined)
+      }
+    }
+    throw lastError instanceof Error ? lastError : new HdcError('HDC screenshot failed.')
   } finally {
-    // Cleanup must still run after cancellation, but never wait indefinitely.
-    await shell(deviceId, ['rm', '-f', remotePath], { ...options, signal: undefined, timeoutMs: 3000 }).catch(() => undefined)
     await rm(directory, { recursive: true, force: true })
   }
 }
