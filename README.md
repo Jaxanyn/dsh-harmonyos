@@ -45,6 +45,16 @@ dsh plugin --profile web add link:F:\HongMengHangtu\dsh-HarmonyOS -w
 
 修改代码并重新构建后，重启 DSH Desktop 以加载新的插件产物。
 
+### 从 GitHub 安装
+
+DSH 支持使用 GitHub 安装规格：
+
+```powershell
+dsh plugin --profile web add github:Jaxanyn/dsh-harmonyos -w
+```
+
+Git 安装会运行 `prepare` 脚本构建插件。首次安装可能要求为该构建脚本授权，只对确认过来源的代码授权。安装完成后重启 DSH Desktop。
+
 ## 使用
 
 可以在 DSH 对话中直接提出以下请求：
