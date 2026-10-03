@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { capture, listDevices } from './hdc.js'
 import { HdcError } from './errors.js'
 
@@ -25,6 +25,7 @@ export type HarmonySessionView = Omit<HarmonySession, 'frame'> & { width?: numbe
 const sessions = new Map<string, HarmonySession>()
 const timers = new Map<string, NodeJS.Timeout>()
 const polling = new Set<string>()
+const frameDigests = new Map<string, string>()
 
 function pngDimensions(data: Buffer): { width?: number; height?: number } {
   if (data.length < 24 || data.readUInt32BE(0) !== 0x89504e47) return {}
@@ -37,6 +38,9 @@ async function refresh(session: HarmonySession): Promise<void> {
   try {
     const frame = await capture(session.deviceId)
     const dimensions = pngDimensions(frame.data)
+    const digest = createHash('sha1').update(frame.data).digest('hex')
+    if (frameDigests.get(session.sessionId) === digest) return
+    frameDigests.set(session.sessionId, digest)
     session.frameId += 1
     session.frame = { ...frame, ...dimensions, frameId: session.frameId, capturedAt: new Date().toISOString() }
   } catch {
@@ -88,7 +92,10 @@ export function stopSession(sessionId: string): HarmonySessionView {
   const timer = timers.get(sessionId)
   if (timer) clearInterval(timer)
   timers.delete(sessionId)
-  return publicSession(session)
+  const result = publicSession(session)
+  sessions.delete(sessionId)
+  frameDigests.delete(sessionId)
+  return result
 }
 
 export function listSessions(): HarmonySessionView[] {

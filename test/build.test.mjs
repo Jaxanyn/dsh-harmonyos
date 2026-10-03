@@ -11,7 +11,7 @@ async function project() {
   await writeFile(join(root, 'hvigorw.js'), '')
   return root
 }
-const base = { deviceId: 'device-1', bundleName: 'com.example.app', abilityName: 'EntryAbility', module: 'entry', product: 'default', target: 'default' }
+const base = { deviceId: '5device-1', bundleName: 'com.example.app', abilityName: 'EntryAbility', module: 'entry', product: 'default', target: 'default' }
 
 test('build invokes node hvigor with exact arguments and installs then launches fresh signed HAP', async () => {
   const root = await project(); const calls = []
@@ -20,6 +20,7 @@ test('build invokes node hvigor with exact arguments and installs then launches 
     assert.equal(result.built, true); assert.deepEqual(calls.map(x => x[0]), ['build', 'install', 'launch'])
     assert.deepEqual(calls[0][2], ['assembleHap', '--mode', 'module', '-p', 'product=default', '-p', 'module=entry@default', '-p', 'buildMode=debug'])
     assert.equal(calls[0][3].cwd, root)
+    assert.equal(calls[1][3].timeoutMs, 120000); assert.equal(calls[2][4].timeoutMs, 120000)
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 

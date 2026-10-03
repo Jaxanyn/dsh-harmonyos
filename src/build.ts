@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { access, readdir, stat } from 'node:fs/promises'
+import { readdir, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { HdcError } from './errors.js'
@@ -7,6 +7,7 @@ import { installPackage, startAbility, type HdcOptions } from './hdc.js'
 
 const execFileAsync = promisify(execFile)
 const ID = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/
+const DEVICE_ID = /^[A-Za-z0-9][A-Za-z0-9._:\[\]-]{0,255}$/
 const MODULE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/
 const TAIL = 4000
 
@@ -93,7 +94,7 @@ const defaultRunner: Runner = async (file, args, options) => execFileAsync(proce
 export async function buildAndRun(options: BuildRunOptions): Promise<BuildRunResult> {
   const projectPath = resolve(options.projectPath)
   if (!(await isFile(join(projectPath, 'build-profile.json5')))) throw new HdcError('A Stage project build-profile.json5 is required: ' + projectPath)
-  if (!options.deviceId || !ID.test(options.deviceId)) throw new HdcError('An explicit valid HDC deviceId is required.')
+  if (!options.deviceId || !DEVICE_ID.test(options.deviceId)) throw new HdcError('An explicit valid HDC deviceId is required.')
   if (!ID.test(options.bundleName) || !ID.test(options.abilityName)) throw new HdcError('bundleName and abilityName must be valid HarmonyOS identifiers.')
   const timeout = options.timeoutMs ?? 300000
   if (!Number.isInteger(timeout) || timeout < 1 || timeout > 1800000) throw new HdcError('timeoutMs must be an integer from 1 to 1800000.')
@@ -137,7 +138,8 @@ export async function buildAndRun(options: BuildRunOptions): Promise<BuildRunRes
     hapPath = fresh[0]
   }
   options.signal?.throwIfAborted()
-  const hdc: HdcOptions = { timeoutMs: timeout, signal: options.signal }
+  // ponytail: HDC rejects timeouts above 120s; keep the longer budget for hvigor only.
+  const hdc: HdcOptions = { timeoutMs: Math.min(timeout, 120000), signal: options.signal }
   try {
     await (options.install ?? installPackage)(options.deviceId, hapPath, hdc)
     await (options.launch ?? startAbility)(options.deviceId, options.bundleName, options.abilityName, hdc)

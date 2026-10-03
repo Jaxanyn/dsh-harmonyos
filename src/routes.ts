@@ -47,6 +47,14 @@ function authorize(req: IncomingMessage, url: URL, sessionId: string): void {
   if (!record || record.sessionId !== sessionId || record.expiresAt <= Date.now()) throw new HdcError('Preview access token is missing or expired.')
 }
 
+function pruneTokens(now = Date.now()): void {
+  for (const [token, record] of tokens) if (record.expiresAt <= now) tokens.delete(token)
+}
+
+function revokeSessionTokens(sessionId: string): void {
+  for (const [token, record] of tokens) if (record.sessionId === sessionId) tokens.delete(token)
+}
+
 function requireNumber(body: Record<string, unknown>, key: string): number {
   const value = body[key]
   if (typeof value !== 'number' || !Number.isFinite(value)) throw new HdcError(key + ' must be a finite number.')
@@ -69,8 +77,8 @@ async function control(req: IncomingMessage, res: ServerResponse, body: Record<s
   else if (action === 'swipe') await swipe(session.deviceId, px(requireNumber(body, 'fromX'), frame.width) ?? -1, px(requireNumber(body, 'fromY'), frame.height) ?? -1, px(requireNumber(body, 'toX'), frame.width) ?? -1, px(requireNumber(body, 'toY'), frame.height) ?? -1, typeof body.velocity === 'number' ? body.velocity : undefined)
   else if (action === 'button') {
     const key = body.key
-    if (key !== 'back' && key !== 'home' && key !== 'power') throw new HdcError('key must be back, home, or power.')
-    await keyEvent(session.deviceId, key === 'back' ? 'Back' : key === 'home' ? 'Home' : 'Power')
+    if (key !== 'back' && key !== 'home' && key !== 'recent' && key !== 'power') throw new HdcError('key must be back, home, recent, or power.')
+    await keyEvent(session.deviceId, key === 'back' ? 'Back' : key === 'home' ? 'Home' : key === 'recent' ? '5' : 'Power')
   } else if (action === 'type') {
     if (typeof body.text !== 'string') throw new HdcError('text is required.')
     await inputText(session.deviceId, body.text)
@@ -97,6 +105,7 @@ export function installHarmonyRoutes(ctx: RouteContext): () => void {
           return
         }
         if (req.method === 'POST' && path === '/grant') {
+          pruneTokens()
           const body = await readJson(req)
           const sessionId = typeof body.sessionId === 'string' ? body.sessionId : ''
           getSession(sessionId)
@@ -132,7 +141,9 @@ export function installHarmonyRoutes(ctx: RouteContext): () => void {
           const body = await readJson(req)
           const sessionId = typeof body.sessionId === 'string' ? body.sessionId : ''
           authorize(req, url, sessionId)
-          sendJson(res, 200, stopSession(sessionId))
+          const result = stopSession(sessionId)
+          revokeSessionTokens(sessionId)
+          sendJson(res, 200, result)
           return
         }
         sendJson(res, 404, { error: 'not_found' })

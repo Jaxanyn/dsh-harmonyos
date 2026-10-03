@@ -59,7 +59,7 @@ async function execHdc(args: string[], options: HdcOptions = {}): Promise<{ stdo
     })
     // HDC/uitest can return exit 0 for connection, argument and injection failures.
     if (/missing parameter|not supported|unknown command/i.test(result.stdout + '\n' + result.stderr)) throw new HdcError('HDC reported a command failure: ' + (result.stderr || result.stdout).trim().slice(0, 1000))
-    if (/(?:(?:error|failed|failure|unsupported|invalid|missing parameter|not found|not supported|permission denied|no permissions|not connected|no devices?|device offline|unknown command)|\[Fail\]|^\s*usage\s*:)/im.test(result.stdout + '\n' + result.stderr)) {
+    if (/(?:\b(?:error|failed|failure|unsupported|invalid|missing parameter|not found|not supported|permission denied|no permissions|not connected|no devices?|device offline|unknown command)\b|\[Fail\]|^\s*usage\s*:)/im.test(result.stdout + '\n' + result.stderr)) {
       throw new HdcError('HDC reported a command failure: ' + (result.stderr || result.stdout).trim().slice(0, 1000))
     }
     return result
@@ -179,7 +179,8 @@ export async function capture(deviceId: string, options: HdcOptions = {}): Promi
         return { mimeType: 'image/png', data, ...pngDimensions(data) }
       } catch (error) {
         lastError = error
-        if (!(error instanceof HdcError) || !error.message.includes('valid bounded PNG') || attempt === 2) throw error
+        const retryable = error instanceof HdcError && /valid bounded PNG|screenCap|display pixelMap|temporarily unavailable|busy/i.test(error.message)
+        if (!retryable || attempt === 2) throw error
       } finally {
         await shell(deviceId, ['rm', '-f', remotePath], { ...options, signal: undefined, timeoutMs: 3000 }).catch(() => undefined)
       }
