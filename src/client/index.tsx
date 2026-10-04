@@ -79,7 +79,7 @@ function Panel({ controller, embedded = false }: { controller: Controller; embed
         </span>
         <button className="dsh-hm-close" onClick={close} aria-label="Close preview">×</button>
       </header>
-      {!session || session.state === 'stopped' ? (
+      {!session || !session.connected || session.state === 'stopped' || session.state === 'disconnected' ? (
         <section className="dsh-hm-stage">
           <label>Select device
             <select value={selected} onChange={event => setSelected(event.target.value)}>
