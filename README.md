@@ -7,12 +7,9 @@ DeepSeek Harness 的 HarmonyOS 插件。通过 HDC 连接设备，在对话中�
 ## 前置条件
 
 - DSH Desktop 已安装并运行。
-- HDC 已安装，并已加入 `PATH`，或已设置 `HDC`。
+- HDC 已加入 `PATH`，或已设置 `HDC`。
 - HarmonyOS 设备已连接，并已允许 USB 调试。
-- 从 GitHub 安装时，需要 Node.js 24 或更高版本。
-- 构建运行功能需要可用的 Hvigor 和 Stage 项目。
-
-检查设备：
+- GitHub 安装需要 Node.js 24+；构建运行需要 Hvigor 和 Stage 项目。
 
 ```powershell
 hdc list targets
@@ -20,26 +17,26 @@ hdc list targets
 
 ## 安装
 
-### DSH Desktop 对话安装
+### DSH Desktop
 
-推荐在 DSH 对话中发送：
+在 DSH 对话中发送：
 
 ```text
 请安装并启用这个插件：
 https://github.com/Jaxanyn/dsh-harmonyos
 ```
 
-如果要求确认 Git 构建脚本，请确认来源后允许执行。安装完成后重新加载或重启 DSH Desktop。
+确认 Git 构建脚本后，重新加载或重启 DSH Desktop。
 
-### 插件管理器安装
+### 插件管理器
 
 ```powershell
 dsh plugin --profile web add github:Jaxanyn/dsh-harmonyos
 ```
 
-Git 安装会读取插件配置，并在需要时运行 `prepare` 构建插件。DSH Desktop 的 `desktop` profile 由应用管理，桌面端优先使用应用内插件管理器或对话安装。
+DSH Desktop 的 `desktop` profile 由应用管理，桌面端优先使用应用内插件管理器或对话安装。
 
-### 本地开发安装
+### 本地开发
 
 ```powershell
 pnpm install
@@ -53,33 +50,27 @@ dsh plugin --profile web add link:<path-to-repo>
 
 1. 发送「列出当前连接的鸿蒙设备」，获取 `deviceId`。
 2. 发送「启动设备 <deviceId> 的 HarmonyOS 实时预览」。
-3. `harmony_preview_start` 成功后，右侧面板会显示实时画面。
+3. 预览启动后，右侧面板显示画面。
 4. 在面板中刷新、截图、旋转视图，或执行返回、主页、电源和文本输入。
 5. 构建应用时，提供项目路径、设备、包名、Ability、模块、产品和 target。
 
 ## 工具
 
-| 工具 | 用途 | 主要参数 |
+| 工具 | 用途 | 参数 |
 | --- | --- | --- |
-| `harmony_devices` | 列出 HDC 设备 | 无 |
-| `harmony_preview_start` | 启动实时预览 | `deviceId` 可选 |
+| `harmony_devices` | 列出设备 | 无 |
+| `harmony_preview_start` | 启动预览 | `deviceId` 可选 |
 | `harmony_preview_stop` | 停止预览 | `sessionId` 必填 |
-| `harmony_preview_info` | 查看活动会话 | 无 |
+| `harmony_preview_info` | 查看会话 | 无 |
 | `harmony_screenshot` | 获取截图 | `deviceId` 可选 |
 | `harmony_interact` | 操作设备 | `deviceId`、`action` 必填 |
-| `harmony_build_run` | 构建、安装并启动应用 | 项目和构建标识必填 |
+| `harmony_build_run` | 构建并启动应用 | 项目和构建标识必填 |
 
-`harmony_interact` 支持：
+`harmony_interact` 支持 `tap`、`swipe`、`long_press`、`button`、`type`。
 
-```text
-tap、swipe、long_press、button、type
-```
+`harmony_build_run` 必须提供：
 
-`harmony_build_run` 需要：
-
-```text
-projectPath、deviceId、bundleName、abilityName、module、product、target
-```
+`projectPath`、`deviceId`、`bundleName`、`abilityName`、`module`、`product`、`target`。
 
 插件不会猜测包名、Ability 或构建目标。构建成功后才会安装 HAP 并启动 Ability。
 
@@ -92,7 +83,7 @@ pnpm run build
 pnpm test
 ```
 
-连接真机后运行设备测试：
+真机测试：
 
 ```powershell
 $env:HARMONY_DEVICE="<deviceId>"
@@ -101,21 +92,10 @@ pnpm test:device
 
 ## 故障排查
 
-### 找不到设备
-
-运行 `hdc list targets`，检查 USB 调试授权、HDC 路径和设备状态。
-
-### 插件没有加载
-
-确认安装到了当前 DSH profile，Git 构建脚本已完成，并重新加载或重启 DSH Desktop。CLI 的 `--profile web` 不等于桌面端已加载。
-
-### 右侧面板没有显示
-
-确认 `harmony_preview_start` 返回了 `sessionId`，然后重新加载 DSH Desktop。预览会话过期后，重新启动预览即可。
-
-### 构建运行失败
-
-确认 `projectPath` 是 Stage 项目，并核对 `module`、`product`、`target`、`bundleName` 和 `abilityName`。
+- **找不到设备**：运行 `hdc list targets`，检查 USB 调试授权、HDC 路径和设备状态。
+- **插件没有加载**：确认安装到了当前 profile，构建脚本已完成，并重新加载或重启 DSH Desktop。CLI 的 `--profile web` 不等于桌面端已加载。
+- **右侧面板没有显示**：确认 `harmony_preview_start` 返回了 `sessionId`，然后重新启动预览。
+- **构建失败**：确认 `projectPath` 是 Stage 项目，并核对 `module`、`product`、`target`、`bundleName` 和 `abilityName`。
 
 ## 许可证
 
