@@ -37,7 +37,7 @@ function Panel({ controller, embedded = false }: { controller: Controller; embed
   const [text, setText] = useState('')
   const session = state.session
   useEffect(() => {
-    if (!state.visible || session) return
+    if (!state.visible || session?.connected) return
     void request<{ devices: { serial: string; state: string }[] }>('/devices').then(result => {
       setDevices(result.devices)
       if (result.devices.length === 1) setSelected(result.devices[0].serial)
@@ -45,7 +45,7 @@ function Panel({ controller, embedded = false }: { controller: Controller; embed
       controller.error = error instanceof Error ? error.message : String(error)
       emit(controller)
     })
-  }, [controller, state.visible, session?.sessionId])
+  }, [controller, state.visible, session?.sessionId, session?.connected])
   if (!state.visible) return null
   const close = () => { controller.visible = false; emit(controller); emit(root) }
   const disabled = !session?.connected || state.busy
