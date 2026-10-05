@@ -40,3 +40,16 @@ test('uitest success output "No Error" is accepted', async () => {
   const f = fake('No Error')
   await tap('5KLBB25A13202598', 1, 2, { executor: f.executor })
 })
+
+test('screen capture decodes the single-process base64 stream', async () => {
+  const { capture } = await import(modulePath)
+  const streamPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
+  const executor = async (_file, args) => {
+    assert.match(args.at(-1), /screenCap.*base64/)
+    return { stdout: 'ScreenCap saved\n' + streamPng.toString('base64'), stderr: '' }
+  }
+  const frame = await capture('5KLBB25A13202598', { executor })
+  assert.equal(frame.mimeType, 'image/png')
+  assert.equal(frame.width, 1)
+  assert.equal(frame.height, 1)
+})

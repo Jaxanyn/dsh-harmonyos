@@ -1,8 +1,5 @@
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { crc32 } from 'node:zlib'
 import { HdcError } from './errors.js'
@@ -166,32 +163,26 @@ export async function startAbility(deviceId: string, bundleName: string, ability
 export async function capture(deviceId: string, options: HdcOptions = {}): Promise<{ mimeType: 'image/png'; data: Buffer; width: number; height: number }> {
   assertDevice(deviceId)
   options.signal?.throwIfAborted()
-  const directory = await mkdtemp(join(tmpdir(), 'dsh-harmonyos-'))
-  try {
-    let lastError: unknown
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const localPath = join(directory, 'screen-' + attempt + '.png')
-      const remotePath = '/data/local/tmp/dsh-harmonyos-' + randomUUID() + '.png'
-      try {
-        await shell(deviceId, ['uitest', 'screenCap', '-p', remotePath], options)
-        await execHdc(['file', 'recv', remotePath, localPath], { ...options, deviceId })
-        if ((await stat(localPath)).size > 32 * 1024 * 1024) throw new HdcError('HDC screenshot exceeds 32 MiB.')
-        const data = await readFile(localPath)
-        return { mimeType: 'image/png', data, ...pngDimensions(data) }
-      } catch (error) {
-        lastError = error
-        const retryable = error instanceof HdcError && /valid bounded PNG|screenCap|display pixelMap|temporarily unavailable|busy/i.test(error.message)
-        if (!retryable || attempt === 2) throw error
-      } finally {
-        // Remote cleanup is intentionally detached from the capture critical path.
-        // The next HDC command is still serialized by deviceLocks, so this cannot
-        // race a subsequent capture while keeping input latency low.
-        const cleanup = setTimeout(() => { void shell(deviceId, ['rm', '-f', remotePath], { ...options, signal: undefined, timeoutMs: 3000 }).catch(() => undefined) }, 250)
-        cleanup.unref?.()
-      }
+  let lastError: unknown
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const remotePath = '/data/local/tmp/dsh-harmonyos-' + randomUUID() + '.png'
+    try {
+      const command = 'uitest screenCap -p ' + quoteShellArgument(remotePath) + '; base64 ' + quoteShellArgument(remotePath)
+      const result = await execHdc(['shell', command], { ...options, deviceId, maxBuffer: options.maxBuffer ?? 8 * 1024 * 1024 })
+      const encodedStart = result.stdout.indexOf('iVBORw0KGgo')
+      if (encodedStart < 0) throw new HdcError('HDC screenshot did not return a PNG.')
+      const data = Buffer.from(result.stdout.slice(encodedStart).replace(/\s/g, ''), 'base64')
+      if (data.length > 32 * 1024 * 1024) throw new HdcError('HDC screenshot exceeds 32 MiB.')
+      return { mimeType: 'image/png', data, ...pngDimensions(data) }
+    } catch (error) {
+      lastError = error
+      const retryable = error instanceof HdcError && /valid bounded PNG|did not return a PNG|screenCap|display pixelMap|temporarily unavailable|busy/i.test(error.message)
+      if (!retryable || attempt === 2) throw error
+    } finally {
+      // Delay cleanup so a control command can acquire the device lock first.
+      const cleanup = setTimeout(() => { void shell(deviceId, ['rm', '-f', remotePath], { ...options, signal: undefined, timeoutMs: 3000 }).catch(() => undefined) }, 250)
+      cleanup.unref?.()
     }
-    throw lastError instanceof Error ? lastError : new HdcError('HDC screenshot failed.')
-  } finally {
-    await rm(directory, { recursive: true, force: true })
   }
+  throw lastError instanceof Error ? lastError : new HdcError('HDC screenshot failed.')
 }
