@@ -59,7 +59,8 @@ async function execHdc(args: string[], options: HdcOptions = {}): Promise<{ stdo
     })
     // HDC/uitest can return exit 0 for connection, argument and injection failures.
     if (/missing parameter|not supported|unknown command/i.test(result.stdout + '\n' + result.stderr)) throw new HdcError('HDC reported a command failure: ' + (result.stderr || result.stdout).trim().slice(0, 1000))
-    if (/(?:\b(?:error|failed|failure|unsupported|invalid|missing parameter|not found|not supported|permission denied|no permissions|not connected|no devices?|device offline|unknown command)\b|\[Fail\]|^\s*usage\s*:)/im.test(result.stdout + '\n' + result.stderr)) {
+    const diagnostics = (result.stdout + '\n' + result.stderr).replace(/\bno\s+error\b/gi, '')
+    if (/(?:\b(?:error|failed|failure|unsupported|invalid|missing parameter|not found|not supported|permission denied|no permissions|not connected|no devices?|device offline|unknown command)\b|\[Fail\]|^\s*usage\s*:)/im.test(diagnostics)) {
       throw new HdcError('HDC reported a command failure: ' + (result.stderr || result.stdout).trim().slice(0, 1000))
     }
     return result

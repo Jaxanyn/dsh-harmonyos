@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { inputText, keyEvent, longPress, swipe, tap } from './hdc.js'
 import { HdcError } from './errors.js'
-import { getSession, listSessions, publicSession, startSession, stopSession } from './session.js'
+import { beginControl, endControl, getSession, listSessions, publicSession, startSession, stopSession } from './session.js'
 import { listDevices } from './hdc.js'
 
 const PREFIX = '/_dsh/dsh-harmonyos'
@@ -63,27 +63,31 @@ function requireNumber(body: Record<string, unknown>, key: string): number {
 
 async function control(req: IncomingMessage, res: ServerResponse, body: Record<string, unknown>): Promise<void> {
   const sessionId = typeof body.sessionId === 'string' ? body.sessionId : ''
-  const session = getSession(sessionId)
-  const frame = session.frame
-  if (!frame) throw new HdcError('Preview has not produced a frame yet.')
-  if (body.frameId !== frame.frameId) throw new HdcError('The frame is stale; refresh before controlling the device.')
-  const action = body.action
-  if (typeof action !== 'string') throw new HdcError('action is required.')
-  const x = typeof body.x === 'number' ? body.x : undefined
-  const y = typeof body.y === 'number' ? body.y : undefined
-  const px = (value: number | undefined, size: number | undefined) => value === undefined ? undefined : Math.round(value * (size ?? 1))
-  if (action === 'tap') await tap(session.deviceId, px(x, frame.width) ?? -1, px(y, frame.height) ?? -1)
-  else if (action === 'long_press') await longPress(session.deviceId, px(x, frame.width) ?? -1, px(y, frame.height) ?? -1)
-  else if (action === 'swipe') await swipe(session.deviceId, px(requireNumber(body, 'fromX'), frame.width) ?? -1, px(requireNumber(body, 'fromY'), frame.height) ?? -1, px(requireNumber(body, 'toX'), frame.width) ?? -1, px(requireNumber(body, 'toY'), frame.height) ?? -1, typeof body.velocity === 'number' ? body.velocity : undefined)
-  else if (action === 'button') {
-    const key = body.key
-    if (key !== 'back' && key !== 'home' && key !== 'recent' && key !== 'power') throw new HdcError('key must be back, home, recent, or power.')
-    await keyEvent(session.deviceId, key === 'back' ? 'Back' : key === 'home' ? 'Home' : key === 'recent' ? '5' : 'Power')
-  } else if (action === 'type') {
-    if (typeof body.text !== 'string') throw new HdcError('text is required.')
-    await inputText(session.deviceId, body.text)
-  } else throw new HdcError('Unsupported control action: ' + action)
-  sendJson(res, 200, publicSession(session))
+  const session = await beginControl(sessionId)
+  try {
+    const frame = session.frame
+    if (!frame) throw new HdcError('Preview has not produced a frame yet.')
+    if (body.frameId !== frame.frameId) throw new HdcError('The frame is stale; refresh before controlling the device.')
+    const action = body.action
+    if (typeof action !== 'string') throw new HdcError('action is required.')
+    const x = typeof body.x === 'number' ? body.x : undefined
+    const y = typeof body.y === 'number' ? body.y : undefined
+    const px = (value: number | undefined, size: number | undefined) => value === undefined ? undefined : Math.round(value * (size ?? 1))
+    if (action === 'tap') await tap(session.deviceId, px(x, frame.width) ?? -1, px(y, frame.height) ?? -1)
+    else if (action === 'long_press') await longPress(session.deviceId, px(x, frame.width) ?? -1, px(y, frame.height) ?? -1)
+    else if (action === 'swipe') await swipe(session.deviceId, px(requireNumber(body, 'fromX'), frame.width) ?? -1, px(requireNumber(body, 'fromY'), frame.height) ?? -1, px(requireNumber(body, 'toX'), frame.width) ?? -1, px(requireNumber(body, 'toY'), frame.height) ?? -1, typeof body.velocity === 'number' ? body.velocity : undefined)
+    else if (action === 'button') {
+      const key = body.key
+      if (key !== 'back' && key !== 'home' && key !== 'recent' && key !== 'power') throw new HdcError('key must be back, home, recent, or power.')
+      await keyEvent(session.deviceId, key === 'back' ? 'Back' : key === 'home' ? 'Home' : key === 'recent' ? '5' : 'Power')
+    } else if (action === 'type') {
+      if (typeof body.text !== 'string') throw new HdcError('text is required.')
+      await inputText(session.deviceId, body.text)
+    } else throw new HdcError('Unsupported control action: ' + action)
+    sendJson(res, 200, publicSession(session))
+  } finally {
+    endControl(sessionId)
+  }
 }
 
 export function installHarmonyRoutes(ctx: RouteContext): () => void {

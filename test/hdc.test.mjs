@@ -34,3 +34,9 @@ test('semantic HDC errors fail despite executor success', async () => {
   const f = fake('Missing parameter')
   await assert.rejects(() => tap('5KLBB25A13202598', 1, 2, { executor: f.executor }), /command failure/)
 })
+
+test('uitest success output "No Error" is accepted', async () => {
+  const { tap } = await import(modulePath)
+  const f = fake('No Error')
+  await tap('5KLBB25A13202598', 1, 2, { executor: f.executor })
+})

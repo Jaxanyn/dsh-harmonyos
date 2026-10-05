@@ -25,6 +25,7 @@ export type HarmonySessionView = Omit<HarmonySession, 'frame'> & { width?: numbe
 const sessions = new Map<string, HarmonySession>()
 const timers = new Map<string, NodeJS.Timeout>()
 const polling = new Set<string>()
+const controlling = new Set<string>()
 const frameDigests = new Map<string, string>()
 
 function pngDimensions(data: Buffer): { width?: number; height?: number } {
@@ -33,7 +34,7 @@ function pngDimensions(data: Buffer): { width?: number; height?: number } {
 }
 
 async function refresh(session: HarmonySession): Promise<void> {
-  if (polling.has(session.sessionId) || !session.connected) return
+  if (polling.has(session.sessionId) || controlling.has(session.sessionId) || !session.connected) return
   polling.add(session.sessionId)
   try {
     const frame = await capture(session.deviceId)
@@ -82,6 +83,18 @@ export function getSession(sessionId: string): HarmonySession {
   return session
 }
 
+/** Pause capture polling before sending input so HDC commands do not queue behind a screenshot. */
+export async function beginControl(sessionId: string): Promise<HarmonySession> {
+  const session = getSession(sessionId)
+  controlling.add(sessionId)
+  while (polling.has(sessionId)) await new Promise<void>(resolve => setTimeout(resolve, 10))
+  return session
+}
+
+export function endControl(sessionId: string): void {
+  controlling.delete(sessionId)
+}
+
 export function publicSession(session: HarmonySession): HarmonySessionView {
   return { sessionId: session.sessionId, deviceId: session.deviceId, startedAt: session.startedAt, connected: session.connected, frameId: session.frameId, width: session.frame?.width, height: session.frame?.height }
 }
@@ -92,6 +105,7 @@ export function stopSession(sessionId: string): HarmonySessionView {
   const timer = timers.get(sessionId)
   if (timer) clearInterval(timer)
   timers.delete(sessionId)
+  controlling.delete(sessionId)
   const result = publicSession(session)
   sessions.delete(sessionId)
   frameDigests.delete(sessionId)
