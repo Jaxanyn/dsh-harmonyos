@@ -53,7 +53,8 @@ function Portal(): React.ReactElement | null {
 }
 function usePolling(controller: Controller): void { const visible = useController(controller).visible; useEffect(() => { if (!visible || !controller.session) return; let stopped = false; let timer: number | undefined; const tick = async () => { if (stopped) return; if (document.visibilityState !== 'hidden') await refresh(controller); if (!stopped) timer = window.setTimeout(() => void tick(), 700) }; const onVisibility = () => { if (document.visibilityState === 'visible') void tick() }; void tick(); document.addEventListener('visibilitychange', onVisibility); return () => { stopped = true; if (timer !== undefined) window.clearTimeout(timer); document.removeEventListener('visibilitychange', onVisibility) } }, [controller, visible, controller.session?.sessionId]) }
 function drainControl(controller: Controller): void { if (controller.busy || controller.refreshing || !controller.controlQueue.length) return; const body = controller.controlQueue.shift(); if (body) control(controller, body) }
-function control(controller: Controller, body: Record<string, unknown>): void { const session = controller.session; if (!session?.connected || session.frameId === undefined || !controller.token) return; if (controller.busy) { if (controller.controlQueue.length < 16) controller.controlQueue.push(body); return } if (controller.refreshing) controller.refreshAgain = true; controller.busy = true; void request<Session>('/control', { method: 'POST', headers: { authorization: 'Bearer ' + controller.token, 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId, frameId: session.frameId, ...body }) }).then(next => { controller.session = next; controller.error = undefined }).catch(error => { controller.error = error instanceof Error ? error.message : String(error) }).finally(() => { controller.busy = false; emit(controller); void refresh(controller); drainControl(controller) }) }
+function refreshAfterControl(controller: Controller, previousFrameId: number, attempts = 8): void { void refresh(controller).then(() => { if (controller.disposed || !controller.session?.connected || attempts <= 0 || controller.session.frameId !== previousFrameId) return; window.setTimeout(() => refreshAfterControl(controller, previousFrameId, attempts - 1), 120) }) }
+function control(controller: Controller, body: Record<string, unknown>): void { const session = controller.session; if (!session?.connected || session.frameId === undefined || !controller.token) return; if (controller.busy) { if (controller.controlQueue.length < 16) controller.controlQueue.push(body); return } if (controller.refreshing) controller.refreshAgain = true; const previousFrameId = session.frameId; controller.busy = true; void request<Session>('/control', { method: 'POST', headers: { authorization: 'Bearer ' + controller.token, 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId, frameId: session.frameId, ...body }) }).then(next => { controller.session = next; controller.error = undefined }).catch(error => { controller.error = error instanceof Error ? error.message : String(error) }).finally(() => { controller.busy = false; emit(controller); refreshAfterControl(controller, previousFrameId); drainControl(controller) }) }
 type PreviewMode = 'fit' | 'fill'
 function Frame({ controller, mode }: { controller: Controller; mode: PreviewMode }): React.ReactElement {
   const canvas = useRef<HTMLDivElement>(null)
@@ -84,7 +85,7 @@ function Frame({ controller, mode }: { controller: Controller; mode: PreviewMode
     {controller.frame ? <div className="dsh-hm-frame-shell" style={{ width: layout.shellWidth, height: layout.shellHeight }}>
       <img ref={image} src={controller.frame.url} className="dsh-hm-frame" style={{ width: layout.width, height: layout.height, transform: 'translate(-50%, -50%) rotate(' + controller.viewRotation + 'deg)' }} alt="HarmonyOS device screen" draggable={false}
         onPointerDown={event => {
-          if (!controller.session?.connected || controller.busy) return
+          if (!controller.session?.connected) return
           event.currentTarget.setPointerCapture(event.pointerId)
           const point = pointOf(event)
           down.current = { point, time: Date.now() }
@@ -150,7 +151,7 @@ function Panel({ controller, embedded = false, width = 440, expanded = false, on
     return () => window.removeEventListener('keydown', key)
   }, [controller, embedded, expanded, state.visible])
   if (!state.visible) return null
-  const disabled = !session?.connected || state.busy
+  const disabled = !session?.connected || !controller.frame
   const start = () => {
     controller.busy = true
     controller.error = undefined
