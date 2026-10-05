@@ -183,7 +183,11 @@ export async function capture(deviceId: string, options: HdcOptions = {}): Promi
         const retryable = error instanceof HdcError && /valid bounded PNG|screenCap|display pixelMap|temporarily unavailable|busy/i.test(error.message)
         if (!retryable || attempt === 2) throw error
       } finally {
-        await shell(deviceId, ['rm', '-f', remotePath], { ...options, signal: undefined, timeoutMs: 3000 }).catch(() => undefined)
+        // Remote cleanup is intentionally detached from the capture critical path.
+        // The next HDC command is still serialized by deviceLocks, so this cannot
+        // race a subsequent capture while keeping input latency low.
+        const cleanup = setTimeout(() => { void shell(deviceId, ['rm', '-f', remotePath], { ...options, signal: undefined, timeoutMs: 3000 }).catch(() => undefined) }, 250)
+        cleanup.unref?.()
       }
     }
     throw lastError instanceof Error ? lastError : new HdcError('HDC screenshot failed.')

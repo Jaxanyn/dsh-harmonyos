@@ -18,6 +18,7 @@ export interface HarmonySession {
   connected: boolean
   frameId: number
   frame?: HarmonyFrame
+  captureAbort?: AbortController
 }
 
 export type HarmonySessionView = Omit<HarmonySession, 'frame'> & { width?: number; height?: number }
@@ -36,8 +37,10 @@ function pngDimensions(data: Buffer): { width?: number; height?: number } {
 async function refresh(session: HarmonySession): Promise<void> {
   if (polling.has(session.sessionId) || controlling.has(session.sessionId) || !session.connected) return
   polling.add(session.sessionId)
+  const captureAbort = new AbortController()
+  session.captureAbort = captureAbort
   try {
-    const frame = await capture(session.deviceId)
+    const frame = await capture(session.deviceId, { signal: captureAbort.signal })
     const dimensions = pngDimensions(frame.data)
     const digest = createHash('sha1').update(frame.data).digest('hex')
     if (frameDigests.get(session.sessionId) === digest) return
@@ -45,11 +48,13 @@ async function refresh(session: HarmonySession): Promise<void> {
     session.frameId += 1
     session.frame = { ...frame, ...dimensions, frameId: session.frameId, capturedAt: new Date().toISOString() }
   } catch {
+    if (captureAbort.signal.aborted) return
     session.connected = false
     const timer = timers.get(session.sessionId)
     if (timer) clearInterval(timer)
     timers.delete(session.sessionId)
   } finally {
+    if (session.captureAbort === captureAbort) session.captureAbort = undefined
     polling.delete(session.sessionId)
   }
 }
@@ -71,7 +76,14 @@ export async function startSession(deviceId?: string): Promise<HarmonySessionVie
   const session: HarmonySession = { sessionId: randomUUID(), deviceId: resolved, startedAt: new Date().toISOString(), connected: true, frameId: 0 }
   sessions.set(session.sessionId, session)
   await refresh(session)
-  const timer = setInterval(() => void refresh(session), 500)
+  const schedule = async (): Promise<void> => {
+    await refresh(session)
+    if (!session.connected || !timers.has(session.sessionId)) return
+    const timer = setTimeout(() => void schedule(), 500)
+    timer.unref?.()
+    timers.set(session.sessionId, timer)
+  }
+  const timer = setTimeout(() => void schedule(), 500)
   timer.unref?.()
   timers.set(session.sessionId, timer)
   return publicSession(session)
@@ -87,12 +99,15 @@ export function getSession(sessionId: string): HarmonySession {
 export async function beginControl(sessionId: string): Promise<HarmonySession> {
   const session = getSession(sessionId)
   controlling.add(sessionId)
+  session.captureAbort?.abort()
   while (polling.has(sessionId)) await new Promise<void>(resolve => setTimeout(resolve, 10))
   return session
 }
 
 export function endControl(sessionId: string): void {
   controlling.delete(sessionId)
+  const session = sessions.get(sessionId)
+  if (session?.connected) void refresh(session)
 }
 
 export function publicSession(session: HarmonySession): HarmonySessionView {
@@ -102,6 +117,7 @@ export function publicSession(session: HarmonySession): HarmonySessionView {
 export function stopSession(sessionId: string): HarmonySessionView {
   const session = getSession(sessionId)
   session.connected = false
+  session.captureAbort?.abort()
   const timer = timers.get(sessionId)
   if (timer) clearInterval(timer)
   timers.delete(sessionId)
