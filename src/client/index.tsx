@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { mountHarmonyPanelHost, type HarmonyPanelHost } from './panel-host.js'
-import { deviceCoordinate, fitFrame, panelWidth } from './preview-geometry.js'
+import { deviceCoordinate, fillFrame, panelWidth } from './preview-geometry.js'
 
 export type Coordinate = { x: number; y: number }
 export function normalizeCoordinate(point: Coordinate, width: number, height: number): Coordinate {
@@ -62,14 +62,14 @@ function Frame({ controller }: { controller: Controller }): React.ReactElement {
   useEffect(() => {
     const element = canvas.current
     if (!element) return
-    const measure = () => setSize({ width: Math.max(0, element.clientWidth - 24), height: Math.max(0, element.clientHeight - 24) })
+    const measure = () => setSize({ width: Math.max(0, element.clientWidth), height: Math.max(0, element.clientHeight) })
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(element)
     return () => { observer.disconnect(); window.clearTimeout(timer.current) }
   }, [])
   const frame = controller.frame
-  const layout = fitFrame(frame?.width ?? 0, frame?.height ?? 0, size.width, size.height, controller.viewRotation)
+  const layout = fillFrame(frame?.width ?? 0, frame?.height ?? 0, size.width, controller.viewRotation)
   const pointOf = (event: React.PointerEvent<HTMLImageElement>) => {
     const rect = image.current!.getBoundingClientRect()
     const point = normalizeCoordinate({ x: event.clientX - rect.left, y: event.clientY - rect.top }, rect.width, rect.height)
@@ -181,7 +181,7 @@ function Panel({ controller, embedded = false, width = 440, expanded = false, on
       <button className="dsh-hm-primary" disabled={!selected || state.busy} onClick={start} aria-label="Start preview">{state.busy ? '正在连接…' : '开始预览'}</button>
       {!devices.length && <small>请确认设备已通过 HDC 连接。</small>}
     </section> : <>
-      <div className="dsh-hm-toolbar" role="toolbar" aria-label="Preview controls"><span className="dsh-hm-fit-label">适应窗口 <span>· 等比显示</span></span>
+      <div className="dsh-hm-toolbar" role="toolbar" aria-label="Preview controls"><span className="dsh-hm-fit-label">填满宽度 <span>· 等比显示，可滚动查看</span></span>
         <button className="dsh-hm-icon-button" disabled={state.busy} onClick={() => void refresh(controller)} aria-label="Refresh" title="刷新画面"><Icon name="refresh" /></button>
         <button className="dsh-hm-icon-button" disabled={!controller.frame} onClick={() => saveFrame(controller)} aria-label="Screenshot" title="保存截图"><Icon name="camera" /></button>
         <button className="dsh-hm-icon-button" disabled={!controller.frame} onClick={() => { controller.viewRotation = controller.viewRotation === 0 ? 90 : 0; emit(controller) }} aria-label="Rotate view" title="旋转预览"><Icon name="rotate" /></button>
@@ -246,8 +246,8 @@ const CSS = `
 .dsh-hm-toolbar{display:flex;align-items:center;gap:4px;flex:none;min-width:0;padding:5px 14px;border-bottom:1px solid var(--dsw-alias-border-l2,#dddfe5)}
 .dsh-hm-fit-label{flex:1;min-width:0;font-size:12px;font-weight:500;color:var(--dsw-alias-label-secondary,#737984)}
 .dsh-hm-fit-label span{font-size:11px;font-weight:400;opacity:.7}
-.dsh-hm-stage{display:flex;flex:1;min-height:0;min-width:0;padding:0;overflow:hidden;background:var(--dsw-alias-bg-layer-1,#f4f5f7)}
-.dsh-hm-screen{flex:1;min-width:0;min-height:0;position:relative;display:grid;place-items:center;overflow:hidden;padding:12px;background:radial-gradient(ellipse at center,transparent 35%,#00000006)}
+.dsh-hm-stage{display:flex;flex:1;min-height:0;min-width:0;padding:0;overflow:auto;background:var(--dsw-alias-bg-layer-1,#f4f5f7)}
+.dsh-hm-screen{flex:none;width:100%;min-width:0;min-height:100%;position:relative;display:flex;align-items:flex-start;justify-content:center;overflow:visible;padding:0;background:radial-gradient(ellipse at center,transparent 35%,#00000006)}
 .dsh-hm-frame-shell{position:relative;flex:none;border-radius:4px;box-shadow:0 2px 12px #0002}
 .dsh-hm-frame{position:absolute;left:50%;top:50%;display:block;max-width:none;max-height:none;touch-action:none;user-select:none;border-radius:4px}
 .dsh-hm-loading{display:flex;flex-direction:column;align-items:center;gap:14px;color:var(--dsw-alias-label-secondary,#737984);font-size:12px}
