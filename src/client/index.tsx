@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { mountHarmonyPanelHost, type HarmonyPanelHost } from './panel-host.js'
-import { deviceCoordinate, fillFrame, fitFrame, panelWidth } from './preview-geometry.js'
+import { deviceCoordinate, fillFrame, panelWidth, zoomFrame } from './preview-geometry.js'
 
 export type Coordinate = { x: number; y: number }
 export function normalizeCoordinate(point: Coordinate, width: number, height: number): Coordinate {
@@ -57,7 +57,7 @@ function drainControl(controller: Controller): void { if (controller.busy || con
 async function refreshAfterControl(controller: Controller, previousFrameId: number, attempts = 8): Promise<void> { await refresh(controller); if (controller.disposed || !controller.session?.connected || attempts <= 0 || controller.session.frameId !== previousFrameId) return; await new Promise<void>(resolve => window.setTimeout(resolve, 120)); return refreshAfterControl(controller, previousFrameId, attempts - 1) }
 function control(controller: Controller, body: Record<string, unknown>): void { const session = controller.session; if (!session?.connected || session.frameId === undefined || !controller.token) return; if (controller.busy) { if (controller.controlQueue.length < 16) controller.controlQueue.push(body); return } if (controller.refreshing) controller.refreshAgain = true; const previousFrameId = session.frameId; const startedAt = performance.now(); controller.busy = true; controller.controlState = 'sending'; emit(controller); void request<Session>('/control', { method: 'POST', headers: { authorization: 'Bearer ' + controller.token, 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId, frameId: session.frameId, ...body }) }).then(next => { controller.session = next; controller.error = undefined; controller.controlState = 'refreshing' }).catch(error => { controller.error = error instanceof Error ? error.message : String(error); controller.controlState = 'error' }).finally(() => { controller.lastControlMs = Math.round(performance.now() - startedAt); controller.busy = false; emit(controller); void refreshAfterControl(controller, previousFrameId).finally(() => { if (!controller.disposed && controller.controlState === 'refreshing') { controller.controlState = 'idle'; emit(controller) } }); drainControl(controller) }) }
 type PreviewMode = 'fit' | 'fill'
-function Frame({ controller, mode }: { controller: Controller; mode: PreviewMode }): React.ReactElement {
+function Frame({ controller, mode, zoom = 1 }: { controller: Controller; mode: PreviewMode; zoom?: number }): React.ReactElement {
   const canvas = useRef<HTMLDivElement>(null)
   const image = useRef<HTMLImageElement>(null)
   const down = useRef<{ point: Coordinate; time: number }>()
@@ -75,7 +75,7 @@ function Frame({ controller, mode }: { controller: Controller; mode: PreviewMode
   const frame = controller.frame
   const layout = mode === 'fill'
     ? fillFrame(frame?.width ?? 0, frame?.height ?? 0, size.width, controller.viewRotation)
-    : fitFrame(frame?.width ?? 0, frame?.height ?? 0, size.width, size.height, controller.viewRotation)
+    : zoomFrame(frame?.width ?? 0, frame?.height ?? 0, size.width, size.height, zoom, controller.viewRotation)
   const pointOf = (event: React.PointerEvent<HTMLImageElement>) => {
     const rect = image.current!.getBoundingClientRect()
     const point = normalizeCoordinate({ x: event.clientX - rect.left, y: event.clientY - rect.top }, rect.width, rect.height)
@@ -129,6 +129,7 @@ function Panel({ controller, embedded = false, width = 440, expanded = false, on
   const [selected, setSelected] = useState('')
   const [text, setText] = useState('')
   const [previewMode, setPreviewMode] = useState<PreviewMode>('fit')
+  const [zoom, setZoom] = useState(1)
   const drag = useRef<{ x: number; width: number }>()
   const session = state.session
   useEffect(() => {
@@ -188,12 +189,12 @@ function Panel({ controller, embedded = false, width = 440, expanded = false, on
       <button className="dsh-hm-primary" disabled={!selected || state.busy} onClick={start} aria-label="Start preview">{state.busy ? '正在连接…' : '开始预览'}</button>
       {!devices.length && <small>请确认设备已通过 HDC 连接。</small>}
     </section> : <>
-      <div className="dsh-hm-toolbar" role="toolbar" aria-label="Preview controls"><button className="dsh-hm-mode-toggle" onClick={() => setPreviewMode(mode => mode === 'fit' ? 'fill' : 'fit')} aria-pressed={previewMode === 'fill'}>{previewMode === 'fit' ? '适应窗口' : '填满宽度'}<span>· 等比显示</span></button>
+      <div className="dsh-hm-toolbar" role="toolbar" aria-label="Preview controls"><div className="dsh-hm-zoom-group" role="group" aria-label="缩放"><button className={zoom === 1 && previewMode === 'fit' ? 'is-active' : ''} onClick={() => { setPreviewMode('fit'); setZoom(1) }} aria-pressed={zoom === 1 && previewMode === 'fit'}>适应</button><button className={zoom === .75 && previewMode === 'fit' ? 'is-active' : ''} onClick={() => { setPreviewMode('fit'); setZoom(.75) }} aria-pressed={zoom === .75 && previewMode === 'fit'}>75%</button><button className={zoom === 1.25 && previewMode === 'fit' ? 'is-active' : ''} onClick={() => { setPreviewMode('fit'); setZoom(1.25) }} aria-pressed={zoom === 1.25 && previewMode === 'fit'}>125%</button></div><button className="dsh-hm-mode-toggle" onClick={() => setPreviewMode(mode => mode === 'fit' ? 'fill' : 'fit')} aria-pressed={previewMode === 'fill'}>{previewMode === 'fit' ? '适应窗口' : '填满宽度'}<span>· 等比显示</span></button>
         <button className="dsh-hm-icon-button" disabled={state.busy} onClick={() => void refresh(controller)} aria-label="Refresh" title="刷新画面"><Icon name="refresh" /></button>
         <button className="dsh-hm-icon-button" disabled={!controller.frame} onClick={() => saveFrame(controller)} aria-label="Screenshot" title="保存截图"><Icon name="camera" /></button>
         <button className="dsh-hm-icon-button" disabled={!controller.frame} onClick={() => { controller.viewRotation = controller.viewRotation === 0 ? 90 : 0; emit(controller) }} aria-label="Rotate view" title="旋转预览"><Icon name="rotate" /></button>
       </div>
-      <section className={'dsh-hm-stage dsh-hm-stage-' + previewMode}><Frame controller={controller} mode={previewMode} /></section>
+      <section className={'dsh-hm-stage dsh-hm-stage-' + previewMode + (zoom > 1 && previewMode === 'fit' ? ' dsh-hm-stage-zoomed' : '')}><Frame controller={controller} mode={previewMode} zoom={zoom} /></section>
       <footer className="dsh-hm-footer">
         <div className="dsh-hm-navigation" role="toolbar" aria-label="Device controls">
           <button className="dsh-hm-icon-button" disabled={disabled} onClick={() => control(controller, { action: 'button', key: 'back' })} aria-label="Back" title="返回"><Icon name="back" /></button>
@@ -250,7 +251,11 @@ const CSS = `
 .dsh-hm-icon-button:not(:disabled):hover{background:var(--dsw-alias-bg-layer-1,#f0f1f4)}
 .dsh-hm-icon-button:not(:disabled):active{background:var(--dsw-alias-bg-layer-2,#e6e8ed)}
 .dsh-hm-panel :is(button,input,select,[tabindex]):focus-visible{outline:2px solid #5c8ff5;outline-offset:2px}
-.dsh-hm-toolbar{display:flex;align-items:center;gap:4px;flex:none;min-width:0;padding:5px 14px;border-bottom:1px solid var(--dsw-alias-border-l2,#dddfe5)}
+ .dsh-hm-toolbar{display:flex;align-items:center;gap:6px;flex:none;min-width:0;padding:5px 14px;border-bottom:1px solid var(--dsw-alias-border-l2,#dddfe5);overflow:hidden}
+ .dsh-hm-zoom-group{display:inline-flex;align-items:center;flex:none;border:1px solid var(--dsw-alias-border-l2,#dddfe5);border-radius:7px;overflow:hidden;background:var(--dsw-alias-bg-layer-1,#f5f6f8)}
+ .dsh-hm-zoom-group button{border:0;border-right:1px solid var(--dsw-alias-border-l2,#dddfe5);min-height:26px;padding:2px 7px;background:transparent;color:var(--dsw-alias-label-secondary,#737984);font-size:11px}
+ .dsh-hm-zoom-group button:last-child{border-right:0}
+ .dsh-hm-zoom-group button:hover,.dsh-hm-zoom-group button.is-active{background:#497bdb14;color:#497bdb;font-weight:600}
 .dsh-hm-mode-toggle{display:flex;align-items:center;gap:5px;min-width:0;padding:4px 6px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#737984);font-size:12px;font-weight:500}
 .dsh-hm-mode-toggle span{font-size:11px;font-weight:400;opacity:.7}
 .dsh-hm-mode-toggle:hover{background:var(--dsw-alias-bg-layer-1,#f0f1f4)}
@@ -258,7 +263,9 @@ const CSS = `
 .dsh-hm-stage{display:flex;flex:1;min-height:0;min-width:0;padding:0;overflow:hidden;background:var(--dsw-alias-bg-layer-1,#f4f5f7)}
 .dsh-hm-stage-fill{overflow:auto;overscroll-behavior:contain;scroll-behavior:smooth}
 .dsh-hm-screen{flex:none;width:100%;min-width:0;min-height:100%;position:relative;display:flex;align-items:flex-start;justify-content:center;overflow:visible;padding:0;background:radial-gradient(ellipse at center,transparent 35%,#00000006)}
-.dsh-hm-stage-fit .dsh-hm-screen{flex:1;height:100%;min-height:0;align-items:center;overflow:hidden;padding:12px}
+ .dsh-hm-stage-fit .dsh-hm-screen{flex:1;height:100%;min-height:0;align-items:center;overflow:hidden;padding:12px}
+ .dsh-hm-stage-fit.dsh-hm-stage-zoomed{overflow:auto}
+ .dsh-hm-stage-fit.dsh-hm-stage-zoomed .dsh-hm-screen{min-height:100%;height:auto;overflow:visible}
 .dsh-hm-frame-shell{position:relative;flex:none;border-radius:4px;box-shadow:0 2px 12px #0002}
 .dsh-hm-frame{position:absolute;left:50%;top:50%;display:block;max-width:none;max-height:none;touch-action:none;user-select:none;border-radius:4px}
 .dsh-hm-loading{display:flex;flex-direction:column;align-items:center;gap:14px;color:var(--dsw-alias-label-secondary,#737984);font-size:12px}

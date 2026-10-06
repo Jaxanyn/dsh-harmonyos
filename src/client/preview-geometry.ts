@@ -24,6 +24,13 @@ export function fillFrame(width: number, height: number, availableWidth: number,
   return { width: width * scale, height: height * scale, shellWidth: (rotated ? height : width) * scale, shellHeight: (rotated ? width : height) * scale, scale }
 }
 
+/** Scale a fitted frame while preserving its aspect ratio for quick zoom buttons. */
+export function zoomFrame(width: number, height: number, availableWidth: number, availableHeight: number, zoom: number, rotation: 0 | 90 = 0) {
+  const fitted = fitFrame(width, height, availableWidth, availableHeight, rotation)
+  if (!fitted.scale || !Number.isFinite(zoom) || zoom <= 0) return fitted
+  return { ...fitted, width: fitted.width * zoom, height: fitted.height * zoom, shellWidth: fitted.shellWidth * zoom, shellHeight: fitted.shellHeight * zoom, scale: fitted.scale * zoom }
+}
+
 export function deviceCoordinate(x: number, y: number, rotation: 0 | 90): { x: number; y: number } {
   return rotation === 90 ? { x: y, y: 1 - x } : { x, y }
 }
