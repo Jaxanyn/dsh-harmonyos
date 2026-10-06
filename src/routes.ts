@@ -55,6 +55,32 @@ function revokeSessionTokens(sessionId: string): void {
   for (const [token, record] of tokens) if (record.sessionId === sessionId) tokens.delete(token)
 }
 
+function isLoopbackHost(value: string): boolean {
+  const raw = value.trim().toLowerCase()
+  if (raw === '::1' || raw === '0:0:0:0:0:0:0:1' || raw === '::ffff:127.0.0.1') return true
+  const host = raw.startsWith('[') ? raw.slice(1, raw.indexOf(']')) : raw.replace(/:\d+$/, '')
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0:0:0:0:0:0:0:1' || host === '::ffff:127.0.0.1'
+}
+
+function authorizeLocalRequest(req: IncomingMessage): void {
+  const remote = req.socket?.remoteAddress
+  if (remote && !isLoopbackHost(remote)) throw new HdcError('HarmonyOS preview routes accept local requests only.')
+  const host = req.headers.host
+  if (host && !isLoopbackHost(host)) throw new HdcError('HarmonyOS preview host must be local.')
+  const origin = req.headers.origin
+  if (origin && origin !== 'null') {
+    try {
+      const originHost = new URL(origin).hostname
+      if (!isLoopbackHost(originHost)) throw new HdcError('HarmonyOS preview origin must be local.')
+    } catch (error) {
+      if (error instanceof HdcError) throw error
+      throw new HdcError('HarmonyOS preview origin is invalid.')
+    }
+  }
+  const fetchSite = req.headers['sec-fetch-site']
+  if (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'same-site' && fetchSite !== 'none') throw new HdcError('Cross-site HarmonyOS preview requests are blocked.')
+}
+
 function requireNumber(body: Record<string, unknown>, key: string): number {
   const value = body[key]
   if (typeof value !== 'number' || !Number.isFinite(value)) throw new HdcError(key + ' must be a finite number.')
@@ -98,6 +124,7 @@ export function installHarmonyRoutes(ctx: RouteContext): () => void {
       const url = new URL(req.url ?? '/', 'http://localhost')
       const path = url.pathname.slice(PREFIX.length) || '/'
       try {
+        authorizeLocalRequest(req)
         if (req.method === 'GET' && path === '/devices') {
           sendJson(res, 200, { devices: await listDevices() })
           return
