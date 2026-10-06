@@ -60,3 +60,11 @@ test('installed app listing parses bundle names and ignores headers', async () =
   assert.deepEqual(await listApps('5KLBB25A13202598', { executor: f.executor }), ['com.example.alpha', 'com.example.beta'])
   assert.match(f.calls[0].args.at(-1), /bm.*dump.*-a/)
 })
+
+test('launch ability uses explicit bundle and ability names', async () => {
+  const { startAbility } = await import(modulePath)
+  const f = fake()
+  await startAbility('5KLBB25A13202598', 'com.example.app', 'EntryAbility', { executor: f.executor })
+  assert.match(f.calls[0].args.at(-1), /aa.*start.*com\.example\.app.*EntryAbility/)
+  await assert.rejects(() => startAbility('5KLBB25A13202598', 'bad name', 'EntryAbility', { executor: f.executor }), /valid HarmonyOS identifiers/)
+})

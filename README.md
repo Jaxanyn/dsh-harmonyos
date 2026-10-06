@@ -60,6 +60,7 @@ dsh plugin --profile web add link:<path-to-repo>
 | --- | --- | --- |
 | `harmony_devices` | 列出设备 | 无 |
 | `harmony_list_apps` | 列出已安装应用包名 | `deviceId`、`query` 可选 |
+| `harmony_launch_app` | 启动指定应用 Ability | `deviceId`、`bundleName`、`abilityName` |
 | `harmony_preview_start` | 启动预览 | `deviceId` 可选 |
 | `harmony_preview_stop` | 停止预览 | `sessionId` 必填 |
 | `harmony_preview_info` | 查看会话 | 无 |
@@ -69,7 +70,7 @@ dsh plugin --profile web add link:<path-to-repo>
 
 `harmony_interact` 支持 `tap`、`swipe`、`long_press`、`button`、`type`。
 
-`harmony_list_apps` 返回设备上的应用包名，可通过 `query` 按包名过滤。预览面板会在设备操作后短时间加快刷新，空闲时自动降低刷新频率，并在底部显示最近一次操作耗时和画面状态。
+`harmony_list_apps` 返回设备上的应用包名，可通过 `query` 按包名过滤。`harmony_launch_app` 要求明确传入 `bundleName` 和 `abilityName`，插件不会猜测入口 Ability。预览面板会在设备操作后短时间加快刷新，空闲时自动降低刷新频率，并在底部显示最近一次操作耗时和画面状态。
 
 `harmony_build_run` 必须提供：
 

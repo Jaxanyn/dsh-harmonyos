@@ -1,5 +1,5 @@
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
-import { capture, inputText, keyEvent, listApps, listDevices, longPress, swipe, tap } from './hdc.js'
+import { capture, inputText, keyEvent, listApps, listDevices, longPress, startAbility, swipe, tap } from './hdc.js'
 import { buildAndRun } from './build.js'
 import { explainHdcError, HdcError } from './errors.js'
 import { getSession, listSessions, resolveDevice, startSession, stopSession } from './session.js'
@@ -38,6 +38,17 @@ const listAppsTool = defineTool({
     const apps = await listApps(args.deviceId)
     const query = typeof args.query === 'string' ? args.query.trim().toLowerCase() : ''
     return { deviceId: args.deviceId, apps: query ? apps.filter(app => app.toLowerCase().includes(query)) : apps }
+  },
+})
+
+const launchAppTool = defineTool({
+  name: 'harmony_launch_app',
+  description: 'Launch an explicitly named HarmonyOS Stage ability on a connected device through HDC.',
+  parameters: { deviceId: { type: 'string', required: true }, bundleName: { type: 'string', required: true }, abilityName: { type: 'string', required: true } },
+  output: { schema: { type: 'object', additionalProperties: false, properties: { deviceId: { type: 'string' }, bundleName: { type: 'string' }, abilityName: { type: 'string' }, started: { type: 'boolean' } } }, render: (_args, value) => jsonResult(value) },
+  async execute(args) {
+    await startAbility(args.deviceId, args.bundleName, args.abilityName)
+    return { deviceId: args.deviceId, bundleName: args.bundleName, abilityName: args.abilityName, started: true }
   },
 })
 
@@ -114,5 +125,5 @@ const buildRunTool = defineTool({
   async execute(args) { return buildAndRun(args) },
 })
 
-export const harmonyTools: ToolDefinition[] = [devicesTool, listAppsTool, previewStartTool, previewStopTool, previewInfoTool, screenshotTool, interactTool, buildRunTool]
+export const harmonyTools: ToolDefinition[] = [devicesTool, listAppsTool, launchAppTool, previewStartTool, previewStopTool, previewInfoTool, screenshotTool, interactTool, buildRunTool]
 export { explainHdcError, getSession }

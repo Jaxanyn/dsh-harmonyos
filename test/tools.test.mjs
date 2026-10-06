@@ -6,6 +6,7 @@ test('registers the current HarmonyOS tool surface', async () => {
   assert.deepEqual(harmonyTools.map(tool => tool.name), [
     'harmony_devices',
     'harmony_list_apps',
+    'harmony_launch_app',
     'harmony_preview_start',
     'harmony_preview_stop',
     'harmony_preview_info',
