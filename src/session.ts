@@ -28,6 +28,12 @@ const timers = new Map<string, NodeJS.Timeout>()
 const polling = new Set<string>()
 const controlling = new Set<string>()
 const frameDigests = new Map<string, string>()
+const interactiveUntil = new Map<string, number>()
+
+/** Refresh rapidly for a short window after input, then ease off while idle. */
+export function previewRefreshDelayMs(now: number, activeUntil: number): number {
+  return now < activeUntil ? 180 : 900
+}
 
 function pngDimensions(data: Buffer): { width?: number; height?: number } {
   if (data.length < 24 || data.readUInt32BE(0) !== 0x89504e47) return {}
@@ -79,11 +85,11 @@ export async function startSession(deviceId?: string): Promise<HarmonySessionVie
   const schedule = async (): Promise<void> => {
     await refresh(session)
     if (!session.connected || !timers.has(session.sessionId)) return
-    const timer = setTimeout(() => void schedule(), 500)
+    const timer = setTimeout(() => void schedule(), previewRefreshDelayMs(Date.now(), interactiveUntil.get(session.sessionId) ?? 0))
     timer.unref?.()
     timers.set(session.sessionId, timer)
   }
-  const timer = setTimeout(() => void schedule(), 500)
+  const timer = setTimeout(() => void schedule(), previewRefreshDelayMs(Date.now(), interactiveUntil.get(session.sessionId) ?? 0))
   timer.unref?.()
   timers.set(session.sessionId, timer)
   return publicSession(session)
@@ -98,6 +104,7 @@ export function getSession(sessionId: string): HarmonySession {
 /** Pause capture polling before sending input so HDC commands do not queue behind a screenshot. */
 export async function beginControl(sessionId: string): Promise<HarmonySession> {
   const session = getSession(sessionId)
+  interactiveUntil.set(sessionId, Date.now() + 2_000)
   controlling.add(sessionId)
   session.captureAbort?.abort()
   while (polling.has(sessionId)) await new Promise<void>(resolve => setTimeout(resolve, 10))
@@ -121,6 +128,7 @@ export function stopSession(sessionId: string): HarmonySessionView {
   const timer = timers.get(sessionId)
   if (timer) clearInterval(timer)
   timers.delete(sessionId)
+  interactiveUntil.delete(sessionId)
   controlling.delete(sessionId)
   const result = publicSession(session)
   sessions.delete(sessionId)
