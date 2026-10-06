@@ -69,6 +69,8 @@ dsh plugin --profile web add link:<path-to-repo>
 
 `harmony_interact` 支持 `tap`、`swipe`、`long_press`、`button`、`type`。
 
+`harmony_list_apps` 返回设备上的应用包名，可通过 `query` 按包名过滤。预览面板会在设备操作后短时间加快刷新，空闲时自动降低刷新频率，并在底部显示最近一次操作耗时和画面状态。
+
 `harmony_build_run` 必须提供：
 
 `projectPath`、`deviceId`、`bundleName`、`abilityName`、`module`、`product`、`target`。
@@ -96,6 +98,7 @@ pnpm test:device
 - **找不到设备**：运行 `hdc list targets`，检查 USB 调试授权、HDC 路径和设备状态。
 - **插件没有加载**：确认安装到了当前 profile，构建脚本已完成，并重新加载或重启 DSH Desktop。CLI 的 `--profile web` 不等于桌面端已加载。
 - **右侧面板没有显示**：确认 `harmony_preview_start` 返回了 `sessionId`，然后重新启动预览。
+- **跨站请求被拒绝**：预览接口只接受 DSH Desktop 本机回环请求，请通过 DSH Desktop 页面访问，不要直接从其他网页调用接口。
 - **构建失败**：确认 `projectPath` 是 Stage 项目，并核对 `module`、`product`、`target`、`bundleName` 和 `abilityName`。
 
 ## 许可证
