@@ -74,9 +74,14 @@ async function execHdc(args: string[], options: HdcOptions = {}): Promise<{ stdo
   }
 }
 
-async function shell(deviceId: string, args: string[], options: HdcOptions): Promise<void> {
+async function shellOutput(deviceId: string, args: string[], options: HdcOptions): Promise<string> {
   assertDevice(deviceId)
-  await execHdc(['shell', args.map(quoteShellArgument).join(' ')], { ...options, deviceId })
+  const result = await execHdc(['shell', args.map(quoteShellArgument).join(' ')], { ...options, deviceId })
+  return result.stdout
+}
+
+async function shell(deviceId: string, args: string[], options: HdcOptions): Promise<void> {
+  await shellOutput(deviceId, args, options)
 }
 
 export async function listDevices(hdcOrOptions?: string | HdcOptions): Promise<HarmonyDevice[]> {
@@ -121,6 +126,16 @@ export async function keyEvent(deviceId: string, key: string, options: HdcOption
 export async function inputText(deviceId: string, text: string, options: HdcOptions = {}): Promise<void> {
   if (typeof text !== 'string' || !text || text.length > 4096 || /[\x00-\x1f\x7f]/.test(text)) throw new HdcError('text must contain 1 to 4096 characters without control characters.')
   await shell(deviceId, ['uitest', 'uiInput', 'text', text], options)
+}
+
+export async function listApps(deviceId: string, options: HdcOptions = {}): Promise<string[]> {
+  const output = await shellOutput(deviceId, ['bm', 'dump', '-a'], { ...options, maxBuffer: options.maxBuffer ?? 4 * 1024 * 1024 })
+  const apps = new Set<string>()
+  for (const line of output.split(/\r?\n/)) {
+    const value = line.trim()
+    if (/^[A-Za-z][A-Za-z0-9_.-]{1,127}$/.test(value)) apps.add(value)
+  }
+  return [...apps].sort()
 }
 
 export function pngDimensions(data: Buffer): { width: number; height: number } {

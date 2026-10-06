@@ -53,3 +53,10 @@ test('screen capture decodes the single-process base64 stream', async () => {
   assert.equal(frame.width, 1)
   assert.equal(frame.height, 1)
 })
+
+test('installed app listing parses bundle names and ignores headers', async () => {
+  const { listApps } = await import(modulePath)
+  const f = fake('ID: 100:\n\tcom.example.alpha\n\tcom.example.alpha\n\tcom.example.beta\nUser ID #100\n')
+  assert.deepEqual(await listApps('5KLBB25A13202598', { executor: f.executor }), ['com.example.alpha', 'com.example.beta'])
+  assert.match(f.calls[0].args.at(-1), /bm.*dump.*-a/)
+})

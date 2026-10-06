@@ -59,6 +59,7 @@ dsh plugin --profile web add link:<path-to-repo>
 | 工具 | 用途 | 参数 |
 | --- | --- | --- |
 | `harmony_devices` | 列出设备 | 无 |
+| `harmony_list_apps` | 列出已安装应用包名 | `deviceId`、`query` 可选 |
 | `harmony_preview_start` | 启动预览 | `deviceId` 可选 |
 | `harmony_preview_stop` | 停止预览 | `sessionId` 必填 |
 | `harmony_preview_info` | 查看会话 | 无 |

@@ -1,5 +1,5 @@
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
-import { capture, inputText, keyEvent, listDevices, longPress, swipe, tap } from './hdc.js'
+import { capture, inputText, keyEvent, listApps, listDevices, longPress, swipe, tap } from './hdc.js'
 import { buildAndRun } from './build.js'
 import { explainHdcError, HdcError } from './errors.js'
 import { getSession, listSessions, resolveDevice, startSession, stopSession } from './session.js'
@@ -26,6 +26,18 @@ const devicesTool = defineTool({
   async execute() {
     const devices = await listDevices()
     return { devices: devices.map(({ serial, state }) => ({ serial, state })) }
+  },
+})
+
+const listAppsTool = defineTool({
+  name: 'harmony_list_apps',
+  description: 'List HarmonyOS application bundle names installed on a connected device through HDC.',
+  parameters: { deviceId: { type: 'string', required: true }, query: { type: 'string', description: 'Optional case-insensitive bundle-name filter.' } },
+  output: { schema: { type: 'object', additionalProperties: false, properties: { deviceId: { type: 'string' }, apps: { type: 'array', items: { type: 'string' } } } }, render: (_args, value) => jsonResult(value) },
+  async execute(args) {
+    const apps = await listApps(args.deviceId)
+    const query = typeof args.query === 'string' ? args.query.trim().toLowerCase() : ''
+    return { deviceId: args.deviceId, apps: query ? apps.filter(app => app.toLowerCase().includes(query)) : apps }
   },
 })
 
@@ -102,5 +114,5 @@ const buildRunTool = defineTool({
   async execute(args) { return buildAndRun(args) },
 })
 
-export const harmonyTools: ToolDefinition[] = [devicesTool, previewStartTool, previewStopTool, previewInfoTool, screenshotTool, interactTool, buildRunTool]
+export const harmonyTools: ToolDefinition[] = [devicesTool, listAppsTool, previewStartTool, previewStopTool, previewInfoTool, screenshotTool, interactTool, buildRunTool]
 export { explainHdcError, getSession }
